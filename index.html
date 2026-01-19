@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Echoes of the Fall</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        <div id="hud">
+            <div id="turn-info">
+                <span id="turn-counter">Turn 1</span>
+                <span id="phase-indicator">Player Phase</span>
+            </div>
+            <div id="resources">
+                <div class="resource"><span class="label">Scrap:</span><span id="scrap-count">0</span></div>
+                <div class="resource"><span class="label">Medicine:</span><span id="medicine-count">0</span></div>
+                <div class="resource"><span class="label">Food:</span><span id="food-count">0</span></div>
+                <div class="resource"><span class="label">Water:</span><span id="water-count">0</span></div>
+            </div>
+            <div id="unit-info" class="hidden">
+                <h3 id="unit-name">Unit Name</h3>
+                <div class="stat-bar">
+                    <span class="label">HP:</span>
+                    <div class="bar"><div id="health-bar" class="fill health"></div></div>
+                    <span id="health-text">100/100</span>
+                </div>
+                <div class="stat-bar">
+                    <span class="label">AP:</span>
+                    <div class="bar"><div id="ap-bar" class="fill ap"></div></div>
+                    <span id="ap-text">3/3</span>
+                </div>
+                <div class="stat-bar">
+                    <span class="label">RAD:</span>
+                    <div class="bar"><div id="rad-bar" class="fill rad"></div></div>
+                    <span id="rad-text">0/100</span>
+                </div>
+                <div class="stat-bar">
+                    <span class="label">H2O:</span>
+                    <div class="bar"><div id="hydration-bar" class="fill hydration"></div></div>
+                    <span id="hydration-text">100/100</span>
+                </div>
+                <div class="stat-bar">
+                    <span class="label">Food:</span>
+                    <div class="bar"><div id="nutrition-bar" class="fill nutrition"></div></div>
+                    <span id="nutrition-text">100/100</span>
+                </div>
+            </div>
+            <button id="end-turn-btn">End Turn</button>
+            <div id="save-load-buttons">
+                <button id="save-btn">Save</button>
+                <button id="load-btn">Load</button>
+            </div>
+        </div>
+        <div id="card-hand"></div>
+        <div id="tooltip" class="hidden"></div>
+        <div id="game-over" class="hidden">
+            <h1 id="game-over-title">Game Over</h1>
+            <p id="game-over-message"></p>
+            <button id="restart-btn">Play Again</button>
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    <script type="module" src="src/main.js"></script>
+</body>
+</html>

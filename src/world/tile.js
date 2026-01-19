@@ -1,0 +1,176 @@
+// Tile class for map grid
+import * as THREE from 'three';
+import { MAP, TERRAIN, COLORS } from '../config.js';
+
+export class Tile {
+    constructor(x, y, elevation, moisture, radiationLevel = 0) {
+        this.x = x;
+        this.y = y;
+        this.elevation = elevation;
+        this.moisture = moisture;
+        this.radiationLevel = radiationLevel;
+        this.terrain = this.determineTerrain();
+        this.isPassable = this.terrain.passable;
+        this.movementCost = this.terrain.moveCost;
+        this.contents = [];
+        this.mesh = null;
+        this.baseMaterial = null;
+        this.glowMesh = null;
+        this.props = [];
+        this.hasBuilding = false;
+        this.hasRoad = false;
+    }
+
+    determineTerrain() {
+        // Any significant radiation = toxic terrain
+        if (this.radiationLevel > 0.2) {
+            return TERRAIN.TOXIC;
+        }
+
+        // Water in low elevation + high moisture areas
+        if (this.elevation < 0.15 && this.moisture > 0.6) {
+            return TERRAIN.WATER;
+        }
+
+        // Mud near water (low elevation, moderate moisture)
+        if (this.elevation < 0.25 && this.moisture > 0.45) {
+            return TERRAIN.MUD;
+        }
+
+        // Sand in dry, low areas
+        if (this.moisture < 0.25 && this.elevation < 0.35) {
+            return TERRAIN.SAND;
+        }
+
+        // Grass in moderate moisture areas
+        if (this.moisture > 0.35 && this.moisture < 0.6) {
+            return TERRAIN.GRASS;
+        }
+
+        // Default to dirt
+        return TERRAIN.DIRT;
+    }
+
+    // Set terrain type directly (used by props/roads)
+    setTerrain(terrainType) {
+        this.terrain = terrainType;
+        this.isPassable = terrainType.passable;
+        this.movementCost = terrainType.moveCost;
+        this.radiationLevel = terrainType.radiation;
+
+        // Update mesh color if already created
+        if (this.baseMaterial) {
+            const baseColor = new THREE.Color(terrainType.color);
+            const variation = (Math.random() - 0.5) * 0.08;
+            baseColor.offsetHSL(0, 0, variation);
+            this.baseMaterial.color = baseColor;
+        }
+    }
+
+    createMesh() {
+        const geometry = new THREE.BoxGeometry(
+            MAP.TILE_SIZE * 0.98,
+            MAP.TILE_HEIGHT + this.elevation * 0.3,
+            MAP.TILE_SIZE * 0.98
+        );
+
+        // Add slight color variation
+        const baseColor = new THREE.Color(this.terrain.color);
+        const variation = (Math.random() - 0.5) * 0.08;
+        baseColor.offsetHSL(0, 0, variation);
+
+        this.baseMaterial = new THREE.MeshStandardMaterial({
+            color: baseColor,
+            roughness: this.terrain === TERRAIN.WATER ? 0.3 : 0.85,
+            metalness: this.terrain === TERRAIN.WATER ? 0.2 : 0.05
+        });
+
+        this.mesh = new THREE.Mesh(geometry, this.baseMaterial);
+        this.mesh.position.set(
+            this.x * MAP.TILE_SIZE,
+            (MAP.TILE_HEIGHT + this.elevation * 0.3) / 2,
+            this.y * MAP.TILE_SIZE
+        );
+        this.mesh.castShadow = true;
+        this.mesh.receiveShadow = true;
+        this.mesh.userData.tile = this;
+
+        // Add radiation glow if toxic
+        if (this.radiationLevel > 0.3 || this.terrain === TERRAIN.TOXIC) {
+            this.addRadiationGlow();
+        }
+
+        return this.mesh;
+    }
+
+    addRadiationGlow() {
+        const glowGeometry = new THREE.BoxGeometry(
+            MAP.TILE_SIZE * 0.99,
+            0.05,
+            MAP.TILE_SIZE * 0.99
+        );
+        const intensity = this.terrain === TERRAIN.TOXIC ? 0.5 : this.radiationLevel;
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: COLORS.RADIATION_GLOW,
+            transparent: true,
+            opacity: intensity * 0.35
+        });
+        this.glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
+        this.glowMesh.position.set(
+            this.x * MAP.TILE_SIZE,
+            MAP.TILE_HEIGHT + this.elevation * 0.3 + 0.03,
+            this.y * MAP.TILE_SIZE
+        );
+    }
+
+    setHighlight(color) {
+        if (this.baseMaterial) {
+            this.baseMaterial.emissive.setHex(color);
+            this.baseMaterial.emissiveIntensity = 0.3;
+        }
+    }
+
+    clearHighlight() {
+        if (this.baseMaterial) {
+            this.baseMaterial.emissive.setHex(0x000000);
+            this.baseMaterial.emissiveIntensity = 0;
+        }
+    }
+
+    getUnit() {
+        return this.contents.find(c => c.isUnit);
+    }
+
+    getEnemy() {
+        return this.contents.find(c => c.isEnemy);
+    }
+
+    addContent(entity) {
+        if (!this.contents.includes(entity)) {
+            this.contents.push(entity);
+        }
+    }
+
+    removeContent(entity) {
+        const idx = this.contents.indexOf(entity);
+        if (idx !== -1) {
+            this.contents.splice(idx, 1);
+        }
+    }
+
+    // For tooltip/UI display
+    get biome() {
+        return this.terrain;
+    }
+
+    toJSON() {
+        return {
+            x: this.x,
+            y: this.y,
+            elevation: this.elevation,
+            moisture: this.moisture,
+            radiationLevel: this.radiationLevel,
+            terrain: this.terrain.name
+        };
+    }
+}
