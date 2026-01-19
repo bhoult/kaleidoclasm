@@ -1,11 +1,12 @@
 // Main game bootstrap and loop
-import { initRenderer, render, scene, addLights, clearScene } from './core/renderer.js';
+import { initRenderer, render, scene, addLights, clearScene, switchToOutdoorScene, clearIndoorScene } from './core/renderer.js';
 import { initInput } from './core/input.js';
 import { GameState } from './state.js';
 import { generateMap, renderMap, clearMapHighlights, highlightTiles } from './world/map.js';
 import { COLORS, PHASES } from './config.js';
 import { Unit, createStartingUnits } from './entities/unit.js';
 import { getMovementRange, moveUnit } from './systems/pathfinding.js';
+import { performAttack } from './systems/combat.js';
 import { initTurnSystem, setTurnEndCallback, updatePhaseDisplay } from './core/turn.js';
 import { initHUD, updateHUD, updateUnitInfo, showMessage } from './ui/hud.js';
 import { initCards, drawCards } from './systems/cards.js';
@@ -14,6 +15,8 @@ import { Enemy, spawnEnemies, updateEnemies } from './entities/enemy.js';
 import { applyRadiation } from './systems/radiation.js';
 import { consumeResources } from './systems/resources.js';
 import { initialReveal, revealAroundPosition } from './systems/fogOfWar.js';
+import { getIndoorMovementRange, moveUnitIndoor, updateIndoorUnitPosition } from './systems/interiorManager.js';
+import { highlightInteriorTiles, clearInteriorHighlights } from './systems/interiorRenderer.js';
 
 let animationId = null;
 
@@ -81,11 +84,47 @@ function handleTileClick(tile, button) {
     if (GameState.gameOver) return;
     if (GameState.phase !== PHASES.ACTIONS) return;
 
+    // Route to indoor or outdoor handler
+    if (GameState.viewMode === 'indoor') {
+        handleIndoorTileClick(tile, button);
+    } else {
+        handleOutdoorTileClick(tile, button);
+    }
+}
+
+// Handle clicks on outdoor tiles
+function handleOutdoorTileClick(tile, button) {
     if (button === 'left') {
         // Check if clicking on a unit
         const unit = tile.getUnit();
         if (unit && GameState.units.includes(unit)) {
             selectUnit(unit);
+            return;
+        }
+
+        // Check if clicking on an enemy with a unit selected
+        const enemy = tile.getEnemy();
+        if (enemy && GameState.selectedUnit) {
+            const result = performAttack(GameState.selectedUnit, enemy);
+            if (result) {
+                if (result.hit) {
+                    showMessage(result.message, 1500);
+                } else {
+                    showMessage(result.message, 1500);
+                }
+                // Update UI after attack
+                clearMapHighlights();
+                if (GameState.selectedUnit && GameState.selectedUnit.actionPoints > 0) {
+                    const newRange = getMovementRange(GameState.selectedUnit);
+                    highlightTiles(newRange, COLORS.MOVE_RANGE);
+                }
+                updateUnitInfo(GameState.selectedUnit);
+                updateHUD();
+            } else if (GameState.selectedUnit.actionPoints < 1) {
+                showMessage('Not enough AP!', 1500);
+            } else {
+                showMessage('Enemy not in range!', 1500);
+            }
             return;
         }
 
@@ -106,9 +145,94 @@ function handleTileClick(tile, button) {
             }
         }
     } else if (button === 'right') {
-        // Deselect
-        deselectUnit();
+        // Right-click is now handled by context menu in input.js
     }
+}
+
+// Handle clicks on indoor tiles
+function handleIndoorTileClick(tile, button) {
+    if (button === 'left') {
+        const interior = GameState.currentInterior;
+        if (!interior) return;
+
+        // Find the unit that's indoors
+        let indoorUnit = null;
+        for (const unit of GameState.units) {
+            if (GameState.unitsIndoors.has(unit.id || unit.name)) {
+                indoorUnit = unit;
+                break;
+            }
+        }
+
+        if (!indoorUnit) return;
+
+        // Check if clicking on unit's own tile (select/deselect)
+        const unitOnTile = tile.getUnit();
+        if (unitOnTile === indoorUnit) {
+            selectIndoorUnit(indoorUnit);
+            return;
+        }
+
+        // If unit is selected and tile is passable, try to move there
+        if (GameState.selectedUnit === indoorUnit && tile.isPassable) {
+            const movableTiles = getIndoorMovementRange(indoorUnit, interior);
+            if (movableTiles.includes(tile)) {
+                // Calculate move cost
+                const dx = Math.abs(tile.x - indoorUnit.x);
+                const dy = Math.abs(tile.y - indoorUnit.y);
+                const moveCost = Math.max(dx, dy);  // Simplified cost
+
+                if (indoorUnit.actionPoints >= moveCost) {
+                    // Remove from old tile
+                    const oldTile = interior.getTile(indoorUnit.x, indoorUnit.y);
+                    if (oldTile) oldTile.removeContent(indoorUnit);
+
+                    // Move to new tile
+                    indoorUnit.x = tile.x;
+                    indoorUnit.y = tile.y;
+                    tile.addContent(indoorUnit);
+                    indoorUnit.actionPoints -= moveCost;
+
+                    // Update mesh position
+                    updateIndoorUnitPosition(indoorUnit, interior);
+
+                    // Update movement highlights
+                    clearInteriorHighlights(interior);
+                    if (indoorUnit.actionPoints > 0) {
+                        const newRange = getIndoorMovementRange(indoorUnit, interior);
+                        highlightInteriorTiles(newRange, COLORS.MOVE_RANGE);
+                    }
+
+                    updateUnitInfo(indoorUnit);
+                    updateHUD();
+                }
+            }
+        }
+    }
+}
+
+// Select an indoor unit and show movement range
+function selectIndoorUnit(unit) {
+    const interior = GameState.currentInterior;
+    if (!interior) return;
+
+    // Deselect previous
+    if (GameState.selectedUnit) {
+        GameState.selectedUnit.setSelected(false);
+    }
+
+    GameState.selectedUnit = unit;
+    unit.setSelected(true);
+
+    // Show movement range
+    clearInteriorHighlights(interior);
+    if (unit.actionPoints > 0) {
+        const movableTiles = getIndoorMovementRange(unit, interior);
+        highlightInteriorTiles(movableTiles, COLORS.MOVE_RANGE);
+    }
+
+    // Update HUD
+    updateUnitInfo(unit);
 }
 
 function handleTileHover(tile) {
@@ -216,6 +340,12 @@ function endGame(victory, message) {
 }
 
 function restartGame() {
+    // If indoors, switch back to outdoor first
+    if (GameState.viewMode === 'indoor') {
+        switchToOutdoorScene();
+        clearIndoorScene();
+    }
+
     // Clear scene
     clearScene();
 

@@ -12,6 +12,39 @@ export function updateHUD() {
     document.getElementById('medicine-count').textContent = GameState.globalResources.medicine;
     document.getElementById('food-count').textContent = GameState.globalResources.food;
     document.getElementById('water-count').textContent = GameState.globalResources.water;
+
+    // Update location indicator
+    updateLocationIndicator();
+}
+
+// Show/hide indoor location indicator
+function updateLocationIndicator() {
+    let indicator = document.getElementById('location-indicator');
+
+    // Create indicator if it doesn't exist
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'location-indicator';
+        indicator.style.cssText = `
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #8cf;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            border: 1px solid #4a6a8a;
+        `;
+        document.getElementById('game-container').appendChild(indicator);
+    }
+
+    if (GameState.viewMode === 'indoor' && GameState.currentInterior) {
+        indicator.style.display = 'block';
+        indicator.textContent = `Inside: ${GameState.currentInterior.buildingType}`;
+    } else {
+        indicator.style.display = 'none';
+    }
 }
 
 export function updateUnitInfo(unit) {

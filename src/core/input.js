@@ -4,6 +4,8 @@ import { camera, renderer } from './renderer.js';
 import { GameState } from '../state.js';
 import { getTile, clearMapHighlights, highlightTiles } from '../world/map.js';
 import { COLORS } from '../config.js';
+import { showContextMenu, hideContextMenu, initContextMenu } from '../ui/contextMenu.js';
+import { clearInteriorHighlights, highlightInteriorTiles } from '../systems/interiorRenderer.js';
 
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
@@ -17,6 +19,9 @@ export function initInput(clickHandler, hoverHandler) {
     renderer.domElement.addEventListener('mousemove', onMouseMove);
     renderer.domElement.addEventListener('click', onClick);
     renderer.domElement.addEventListener('contextmenu', onRightClick);
+
+    // Initialize context menu
+    initContextMenu();
 }
 
 function onMouseMove(event) {
@@ -25,10 +30,12 @@ function onMouseMove(event) {
 
     raycaster.setFromCamera(mouse, camera);
 
-    // Use cached visible tile meshes array (populated by fog of war reveal)
-    const tileMeshes = GameState.map.visibleTileMeshes;
+    // Use indoor tile meshes when in indoor mode, otherwise outdoor
+    const tileMeshes = GameState.viewMode === 'indoor' && GameState.currentInterior
+        ? GameState.currentInterior.tileMeshes
+        : GameState.map.visibleTileMeshes;
 
-    const intersects = raycaster.intersectObjects(tileMeshes);
+    const intersects = raycaster.intersectObjects(tileMeshes, true);
 
     // Clear previous hover
     if (GameState.hoveredTile) {
@@ -44,7 +51,12 @@ function onMouseMove(event) {
     const tooltip = document.getElementById('tooltip');
 
     if (intersects.length > 0) {
-        const tile = intersects[0].object.userData.tile;
+        // Handle both direct tile and nested objects (like door groups)
+        let tile = intersects[0].object.userData.tile;
+        if (!tile && intersects[0].object.parent) {
+            tile = intersects[0].object.parent.userData.tile;
+        }
+
         if (tile) {
             GameState.hoveredTile = tile;
             if (onTileHover) onTileHover(tile);
@@ -53,22 +65,38 @@ function onMouseMove(event) {
             if (tooltip) {
                 let tooltipContent = `<strong>${tile.terrain.name}</strong>`;
 
-                // Show objects on tile if present
-                if (tile.propNames && tile.propNames.length > 0) {
-                    tooltipContent += `<br>Objects: ${tile.propNames.join(', ')}`;
-                } else if (tile.propName) {
-                    // Legacy fallback
-                    tooltipContent += `<br>Object: ${tile.propName}`;
-                }
+                // Indoor mode - show furniture info
+                if (GameState.viewMode === 'indoor') {
+                    if (tile.furniture) {
+                        tooltipContent += `<br>${tile.furniture.name}`;
+                        if (tile.furniture.locked) {
+                            tooltipContent += ' (Locked)';
+                        }
+                        if (tile.searched) {
+                            tooltipContent += ' (Searched)';
+                        }
+                    }
+                    if (tile.isExit) {
+                        tooltipContent += `<br><em>Exit</em>`;
+                    }
+                } else {
+                    // Outdoor mode - show objects on tile if present
+                    if (tile.propNames && tile.propNames.length > 0) {
+                        tooltipContent += `<br>Objects: ${tile.propNames.join(', ')}`;
+                    } else if (tile.propName) {
+                        // Legacy fallback
+                        tooltipContent += `<br>Object: ${tile.propName}`;
+                    }
 
-                // Show if tile has road
-                if (tile.hasRoad) {
-                    tooltipContent += `<br>Road`;
-                }
+                    // Show if tile has road
+                    if (tile.hasRoad) {
+                        tooltipContent += `<br>Road`;
+                    }
 
-                // Show radiation level
-                if (tile.radiationLevel > 0) {
-                    tooltipContent += `<br>Radiation: ${Math.round(tile.radiationLevel * 100)}%`;
+                    // Show radiation level
+                    if (tile.radiationLevel > 0) {
+                        tooltipContent += `<br>Radiation: ${Math.round(tile.radiationLevel * 100)}%`;
+                    }
                 }
 
                 // Show movement cost if not standard
@@ -96,6 +124,9 @@ function onMouseMove(event) {
 }
 
 function onClick(event) {
+    // Hide context menu on any left click
+    hideContextMenu();
+
     // Ignore if clicking on UI elements
     if (event.target.closest('#hud') || event.target.closest('#card-hand')) {
         return;
@@ -103,13 +134,20 @@ function onClick(event) {
 
     raycaster.setFromCamera(mouse, camera);
 
-    // Use cached visible tile meshes array
-    const tileMeshes = GameState.map.visibleTileMeshes;
+    // Use indoor tile meshes when in indoor mode, otherwise outdoor
+    const tileMeshes = GameState.viewMode === 'indoor' && GameState.currentInterior
+        ? GameState.currentInterior.tileMeshes
+        : GameState.map.visibleTileMeshes;
 
-    const intersects = raycaster.intersectObjects(tileMeshes);
+    const intersects = raycaster.intersectObjects(tileMeshes, true);
 
     if (intersects.length > 0) {
-        const tile = intersects[0].object.userData.tile;
+        // Handle both direct tile and nested objects
+        let tile = intersects[0].object.userData.tile;
+        if (!tile && intersects[0].object.parent) {
+            tile = intersects[0].object.parent.userData.tile;
+        }
+
         if (tile && onTileClick) {
             onTileClick(tile, 'left');
         }
@@ -120,22 +158,32 @@ function onRightClick(event) {
     event.preventDefault();
 
     // Ignore if clicking on UI
-    if (event.target.closest('#hud') || event.target.closest('#card-hand')) {
+    if (event.target.closest('#hud') || event.target.closest('#card-hand') || event.target.closest('#context-menu')) {
         return;
     }
 
     raycaster.setFromCamera(mouse, camera);
 
-    // Use cached visible tile meshes array
-    const tileMeshes = GameState.map.visibleTileMeshes;
+    // Use indoor tile meshes when in indoor mode, otherwise outdoor
+    const tileMeshes = GameState.viewMode === 'indoor' && GameState.currentInterior
+        ? GameState.currentInterior.tileMeshes
+        : GameState.map.visibleTileMeshes;
 
-    const intersects = raycaster.intersectObjects(tileMeshes);
+    const intersects = raycaster.intersectObjects(tileMeshes, true);
 
     if (intersects.length > 0) {
-        const tile = intersects[0].object.userData.tile;
-        if (tile && onTileClick) {
-            onTileClick(tile, 'right');
+        // Handle both direct tile and nested objects
+        let tile = intersects[0].object.userData.tile;
+        if (!tile && intersects[0].object.parent) {
+            tile = intersects[0].object.parent.userData.tile;
         }
+
+        if (tile) {
+            // Show context menu for tile interactions
+            showContextMenu(tile, event.clientX, event.clientY);
+        }
+    } else {
+        hideContextMenu();
     }
 }
 

@@ -4,6 +4,11 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { MAP, CAMERA } from '../config.js';
 
 export let scene, camera, renderer, controls;
+export let indoorScene = null;      // Separate scene for building interiors
+export let activeScene = null;      // Currently active scene (outdoor or indoor)
+
+// Camera positions for indoor/outdoor
+let outdoorCameraState = null;      // Saved outdoor camera position/target
 
 export function initRenderer() {
     const canvas = document.getElementById('game-canvas');
@@ -79,7 +84,87 @@ export function initRenderer() {
     // Handle resize
     window.addEventListener('resize', onWindowResize);
 
+    // Set active scene to outdoor by default
+    activeScene = scene;
+
+    // Create indoor scene
+    initIndoorScene();
+
     return { scene, camera, renderer, controls };
+}
+
+// Initialize the indoor scene
+function initIndoorScene() {
+    indoorScene = new THREE.Scene();
+    indoorScene.background = new THREE.Color(0x0a0a0a);  // Darker background for indoors
+}
+
+// Switch to indoor scene for building interiors
+export function switchToIndoorScene(interior) {
+    // Save outdoor camera state and control settings
+    outdoorCameraState = {
+        position: camera.position.clone(),
+        target: controls.target.clone(),
+        zoom: camera.zoom,
+        minPolarAngle: controls.minPolarAngle,
+        maxPolarAngle: controls.maxPolarAngle
+    };
+
+    // Clear and prepare indoor scene
+    clearIndoorScene();
+
+    // Adjust camera for interior view - isometric angle looking at center
+    const interiorWidth = interior.width * 0.5;  // INTERIOR_SCALE
+    const interiorHeight = interior.height * 0.5;
+
+    // Position camera for isometric view of interior (similar to outdoor but closer)
+    camera.position.set(3, 4, 3);
+    camera.zoom = 3.0;  // Zoom in for interior detail
+    camera.updateProjectionMatrix();
+
+    // Update controls for indoor view
+    controls.target.set(0, 0, 0);
+    controls.minPolarAngle = 0.3;  // Allow more overhead view
+    controls.maxPolarAngle = Math.PI / 2.2;  // Still prevent going below ground
+    controls.update();
+
+    // Switch active scene
+    activeScene = indoorScene;
+}
+
+// Switch back to outdoor scene
+export function switchToOutdoorScene() {
+    // Restore outdoor camera state and control settings
+    if (outdoorCameraState) {
+        camera.position.copy(outdoorCameraState.position);
+        controls.target.copy(outdoorCameraState.target);
+        camera.zoom = outdoorCameraState.zoom || 1;
+        controls.minPolarAngle = outdoorCameraState.minPolarAngle || 0.1;
+        controls.maxPolarAngle = outdoorCameraState.maxPolarAngle || Math.PI / 2 - 0.1;
+        camera.updateProjectionMatrix();
+        controls.update();
+    }
+
+    // Switch active scene
+    activeScene = scene;
+}
+
+// Clear indoor scene objects
+export function clearIndoorScene() {
+    if (!indoorScene) return;
+
+    while (indoorScene.children.length > 0) {
+        const obj = indoorScene.children[0];
+        indoorScene.remove(obj);
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+            if (Array.isArray(obj.material)) {
+                obj.material.forEach(m => m.dispose());
+            } else {
+                obj.material.dispose();
+            }
+        }
+    }
 }
 
 function onWindowResize() {
@@ -96,7 +181,7 @@ function onWindowResize() {
 }
 
 export function render() {
-    renderer.render(scene, camera);
+    renderer.render(activeScene || scene, camera);
 }
 
 export function addLights() {

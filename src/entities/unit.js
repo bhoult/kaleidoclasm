@@ -104,6 +104,20 @@ export class Unit {
         this.currentTile = newTile;
     }
 
+    // Update mesh position to match current x,y coordinates
+    updateMeshPosition() {
+        if (!this.mesh) return;
+
+        const tile = getTile(this.x, this.y);
+        const elevation = tile ? tile.elevation : 0;
+
+        this.mesh.position.set(
+            this.x * MAP.TILE_SIZE,
+            MAP.TILE_HEIGHT + elevation * 0.3 + 0.35,
+            this.y * MAP.TILE_SIZE
+        );
+    }
+
     setSelected(selected) {
         this.isSelected = selected;
         if (this.selectionRing) {

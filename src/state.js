@@ -36,6 +36,13 @@ export const GameState = {
 
     moveHighlights: [],
 
+    // Interior/building state
+    viewMode: 'outdoor',        // 'outdoor' or 'indoor'
+    currentInterior: null,      // BuildingInterior instance when inside
+    currentBuilding: null,      // Reference to outdoor building tile + return position
+    interiorCache: new Map(),   // "x,y" -> BuildingInterior (cached generated interiors)
+    unitsIndoors: new Map(),    // unitId -> BuildingInterior (tracks which units are indoors)
+
     // Methods
     reset() {
         this.seed = Date.now();
@@ -59,6 +66,11 @@ export const GameState = {
         this.selectedCard = null;
         this.globalResources = { scrap: 10, medicine: 2, food: 5, water: 5 };
         this.moveHighlights = [];
+        this.viewMode = 'outdoor';
+        this.currentInterior = null;
+        this.currentBuilding = null;
+        this.interiorCache.clear();
+        this.unitsIndoors.clear();
     },
 
     toJSON() {
