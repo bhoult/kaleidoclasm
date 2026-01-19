@@ -51,7 +51,7 @@ export function initRenderer() {
     controls.enablePan = true;
     controls.enableZoom = true;
     controls.minZoom = 0.5;
-    controls.maxZoom = 3;
+    controls.maxZoom = 8;
     controls.target.set(0, 0, 0);
 
     // Prevent camera from going below the landscape
