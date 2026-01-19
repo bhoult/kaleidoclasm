@@ -2,6 +2,20 @@
 import * as THREE from 'three';
 import { MAP, TERRAIN, COLORS } from '../config.js';
 
+// Texture loader and cache
+const textureLoader = new THREE.TextureLoader();
+const textureCache = new Map();
+
+function getTexture(path) {
+    if (!textureCache.has(path)) {
+        const texture = textureLoader.load(path);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        textureCache.set(path, texture);
+    }
+    return textureCache.get(path);
+}
+
 export class Tile {
     constructor(x, y, elevation, moisture, radiationLevel = 0) {
         this.x = x;
@@ -60,12 +74,23 @@ export class Tile {
         this.movementCost = terrainType.moveCost;
         this.radiationLevel = terrainType.radiation;
 
-        // Update mesh color if already created
+        // Update material if already created
         if (this.baseMaterial) {
-            const baseColor = new THREE.Color(terrainType.color);
-            const variation = (Math.random() - 0.5) * 0.08;
-            baseColor.offsetHSL(0, 0, variation);
-            this.baseMaterial.color = baseColor;
+            if (terrainType === TERRAIN.GRASS) {
+                // Switch to grass texture
+                const grassTexture = getTexture('images/tiles/grass.jpg');
+                this.baseMaterial.map = grassTexture;
+                this.baseMaterial.color.setHex(0xffffff);
+                this.baseMaterial.needsUpdate = true;
+            } else {
+                // Switch to color
+                this.baseMaterial.map = null;
+                const baseColor = new THREE.Color(terrainType.color);
+                const variation = (Math.random() - 0.5) * 0.08;
+                baseColor.offsetHSL(0, 0, variation);
+                this.baseMaterial.color = baseColor;
+                this.baseMaterial.needsUpdate = true;
+            }
         }
     }
 
@@ -76,16 +101,26 @@ export class Tile {
             MAP.TILE_SIZE * 0.98
         );
 
-        // Add slight color variation
-        const baseColor = new THREE.Color(this.terrain.color);
-        const variation = (Math.random() - 0.5) * 0.08;
-        baseColor.offsetHSL(0, 0, variation);
+        // Use texture for grass, color for other terrains
+        if (this.terrain === TERRAIN.GRASS) {
+            const grassTexture = getTexture('images/tiles/grass.jpg');
+            this.baseMaterial = new THREE.MeshStandardMaterial({
+                map: grassTexture,
+                roughness: 0.85,
+                metalness: 0.05
+            });
+        } else {
+            // Add slight color variation for non-textured tiles
+            const baseColor = new THREE.Color(this.terrain.color);
+            const variation = (Math.random() - 0.5) * 0.08;
+            baseColor.offsetHSL(0, 0, variation);
 
-        this.baseMaterial = new THREE.MeshStandardMaterial({
-            color: baseColor,
-            roughness: this.terrain === TERRAIN.WATER ? 0.3 : 0.85,
-            metalness: this.terrain === TERRAIN.WATER ? 0.2 : 0.05
-        });
+            this.baseMaterial = new THREE.MeshStandardMaterial({
+                color: baseColor,
+                roughness: this.terrain === TERRAIN.WATER ? 0.3 : 0.85,
+                metalness: this.terrain === TERRAIN.WATER ? 0.2 : 0.05
+            });
+        }
 
         this.mesh = new THREE.Mesh(geometry, this.baseMaterial);
         this.mesh.position.set(

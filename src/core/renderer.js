@@ -48,6 +48,11 @@ export function initRenderer() {
     controls.minZoom = 0.5;
     controls.maxZoom = 3;
     controls.target.set(0, 0, 0);
+
+    // Prevent camera from going below the landscape
+    controls.minPolarAngle = 0.1;              // Prevent looking straight down
+    controls.maxPolarAngle = Math.PI / 2 - 0.1; // Prevent going below horizon
+
     controls.update();
 
     // Lighting

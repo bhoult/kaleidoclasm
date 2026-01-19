@@ -5,35 +5,149 @@ import { MAP, TERRAIN, CHUNK } from '../config.js';
 import { noise2D } from './noise.js';
 import { fitsInChunk } from './chunk.js';
 
-// Create a dead tree
+// Create a dead tree with natural branching structure
 function createTree(height = 0.8) {
     const group = new THREE.Group();
 
-    // Trunk
-    const trunkGeo = new THREE.CylinderGeometry(0.03, 0.05, height * 0.6, 6);
+    // Darker, weathered wood colors
+    const trunkColor = 0x3d2d1f;
+    const branchColor = 0x2e2218;
+
     const trunkMat = new THREE.MeshStandardMaterial({
-        color: 0x4a3728,
-        roughness: 0.9
+        color: trunkColor,
+        roughness: 0.95,
+        metalness: 0.0
     });
+
+    const branchMat = new THREE.MeshStandardMaterial({
+        color: branchColor,
+        roughness: 0.95,
+        metalness: 0.0
+    });
+
+    // Main trunk - tapered with slight lean
+    const trunkHeight = height * 0.55;
+    const trunkGeo = new THREE.CylinderGeometry(0.02, 0.06, trunkHeight, 8);
     const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-    trunk.position.y = height * 0.3;
+    trunk.position.y = trunkHeight / 2;
+    trunk.rotation.z = (Math.random() - 0.5) * 0.15; // Slight lean
+    trunk.rotation.x = (Math.random() - 0.5) * 0.1;
     trunk.castShadow = true;
     group.add(trunk);
 
-    // Dead branches (no leaves, post-apocalyptic)
-    const branchMat = new THREE.MeshStandardMaterial({
-        color: 0x3d2817,
-        roughness: 0.9
-    });
+    // Create main branches from trunk
+    const numMainBranches = 3 + Math.floor(Math.random() * 3);
+    const branchStartHeight = trunkHeight * 0.5;
 
-    for (let i = 0; i < 3; i++) {
-        const branchGeo = new THREE.CylinderGeometry(0.01, 0.02, height * 0.3, 4);
+    for (let i = 0; i < numMainBranches; i++) {
+        const branchHeight = branchStartHeight + (trunkHeight * 0.5) * (i / numMainBranches);
+        const branchLength = height * (0.2 + Math.random() * 0.25);
+        const branchThickness = 0.015 + Math.random() * 0.01;
+
+        // Main branch
+        const branchGeo = new THREE.CylinderGeometry(
+            branchThickness * 0.3,
+            branchThickness,
+            branchLength,
+            6
+        );
         const branch = new THREE.Mesh(branchGeo, branchMat);
-        branch.position.y = height * 0.4 + i * 0.1;
-        branch.rotation.z = (Math.random() - 0.5) * 1.2;
-        branch.rotation.y = Math.random() * Math.PI * 2;
+
+        // Position at trunk and angle outward/upward
+        const angle = (i / numMainBranches) * Math.PI * 2 + Math.random() * 0.5;
+        const tilt = 0.4 + Math.random() * 0.6; // Angle from vertical
+
+        branch.position.y = branchHeight;
+        branch.position.x = Math.cos(angle) * 0.02;
+        branch.position.z = Math.sin(angle) * 0.02;
+
+        branch.rotation.z = Math.cos(angle) * tilt;
+        branch.rotation.x = Math.sin(angle) * tilt;
+
+        // Offset so branch extends outward from pivot point
+        branchGeo.translate(0, branchLength / 2, 0);
+
         branch.castShadow = true;
         group.add(branch);
+
+        // Add smaller twigs to each main branch
+        const numTwigs = 2 + Math.floor(Math.random() * 3);
+        for (let j = 0; j < numTwigs; j++) {
+            const twigLength = branchLength * (0.3 + Math.random() * 0.4);
+            const twigGeo = new THREE.CylinderGeometry(0.003, 0.008, twigLength, 4);
+
+            const twig = new THREE.Mesh(twigGeo, branchMat);
+
+            // Position along the parent branch
+            const twigPos = 0.3 + Math.random() * 0.6;
+            const twigAngle = Math.random() * Math.PI * 2;
+            const twigTilt = 0.3 + Math.random() * 0.8;
+
+            // Transform to branch local space (approximate)
+            const branchDir = new THREE.Vector3(
+                Math.cos(angle) * Math.sin(tilt),
+                Math.cos(tilt),
+                Math.sin(angle) * Math.sin(tilt)
+            ).normalize();
+
+            twig.position.copy(branch.position);
+            twig.position.addScaledVector(branchDir, branchLength * twigPos);
+
+            twig.rotation.z = Math.cos(twigAngle) * twigTilt + branch.rotation.z * 0.5;
+            twig.rotation.x = Math.sin(twigAngle) * twigTilt + branch.rotation.x * 0.5;
+
+            twigGeo.translate(0, twigLength / 2, 0);
+
+            twig.castShadow = true;
+            group.add(twig);
+        }
+    }
+
+    // Add a few broken/snapped branch stubs on trunk
+    const numStubs = Math.floor(Math.random() * 3);
+    for (let i = 0; i < numStubs; i++) {
+        const stubLength = 0.03 + Math.random() * 0.04;
+        const stubGeo = new THREE.CylinderGeometry(0.005, 0.012, stubLength, 5);
+        const stub = new THREE.Mesh(stubGeo, branchMat);
+
+        const stubHeight = trunkHeight * (0.3 + Math.random() * 0.4);
+        const stubAngle = Math.random() * Math.PI * 2;
+
+        stub.position.y = stubHeight;
+        stub.position.x = Math.cos(stubAngle) * 0.04;
+        stub.position.z = Math.sin(stubAngle) * 0.04;
+
+        stub.rotation.z = Math.cos(stubAngle) * 1.2;
+        stub.rotation.x = Math.sin(stubAngle) * 1.2;
+
+        stubGeo.translate(0, stubLength / 2, 0);
+
+        stub.castShadow = true;
+        group.add(stub);
+    }
+
+    // Occasionally add exposed roots at base
+    if (Math.random() < 0.4) {
+        const numRoots = 2 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < numRoots; i++) {
+            const rootLength = 0.08 + Math.random() * 0.06;
+            const rootGeo = new THREE.CylinderGeometry(0.005, 0.015, rootLength, 5);
+            const root = new THREE.Mesh(rootGeo, trunkMat);
+
+            const rootAngle = (i / numRoots) * Math.PI * 2 + Math.random() * 0.3;
+
+            root.position.y = 0.02;
+            root.position.x = Math.cos(rootAngle) * 0.03;
+            root.position.z = Math.sin(rootAngle) * 0.03;
+
+            root.rotation.z = Math.cos(rootAngle) * 1.3;
+            root.rotation.x = Math.sin(rootAngle) * 1.3;
+
+            rootGeo.translate(0, rootLength / 2, 0);
+
+            root.castShadow = true;
+            group.add(root);
+        }
     }
 
     return group;
