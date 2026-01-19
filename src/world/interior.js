@@ -399,15 +399,25 @@ export class BuildingInterior {
     }
 
     // Clean up Three.js objects
-    dispose() {
+    dispose(scene) {
         for (const obj of this.sceneObjects) {
+            // Remove from scene
+            if (scene && obj.parent) {
+                scene.remove(obj);
+            }
+            // Dispose geometry
             if (obj.geometry) obj.geometry.dispose();
+            // Dispose material
             if (obj.material) {
                 if (Array.isArray(obj.material)) {
                     obj.material.forEach(m => m.dispose());
                 } else {
                     obj.material.dispose();
                 }
+            }
+            // Dispose shadow map for lights
+            if (obj.shadow && obj.shadow.map) {
+                obj.shadow.map.dispose();
             }
         }
         this.sceneObjects = [];

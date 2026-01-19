@@ -5,25 +5,42 @@ import { MAP, TERRAIN, CHUNK } from '../config.js';
 import { noise2D } from './noise.js';
 import { fitsInChunk } from './chunk.js';
 
+// === CACHED MATERIALS (shared across all props) ===
+const cachedMaterials = {
+    trunk: new THREE.MeshStandardMaterial({ color: 0x3d2d1f, roughness: 0.95, metalness: 0.0 }),
+    branch: new THREE.MeshStandardMaterial({ color: 0x2e2218, roughness: 0.95, metalness: 0.0 }),
+    rock: new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.9, metalness: 0.1 }),
+    debris: new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.85, metalness: 0.15 }),
+    rust: new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.9, metalness: 0.3 }),
+    concrete: new THREE.MeshStandardMaterial({ color: 0x606060, roughness: 0.95, metalness: 0.05 }),
+    road: new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.85, metalness: 0.1 }),
+    roadLine: new THREE.MeshBasicMaterial({ color: 0x4a4a3a })
+};
+
+// === CACHED GEOMETRIES (reused across all props) ===
+const cachedGeometries = {
+    // Tree geometries
+    trunk: new THREE.CylinderGeometry(0.02, 0.06, 0.44, 8),
+    branch: new THREE.CylinderGeometry(0.006, 0.02, 0.2, 6),
+    twig: new THREE.CylinderGeometry(0.003, 0.008, 0.1, 4),
+    stub: new THREE.CylinderGeometry(0.005, 0.012, 0.05, 5),
+    root: new THREE.CylinderGeometry(0.005, 0.015, 0.1, 5),
+    // Rock/debris geometries
+    rockSmall: new THREE.DodecahedronGeometry(0.08, 0),
+    rockMedium: new THREE.DodecahedronGeometry(0.15, 1),
+    debrisBox: new THREE.BoxGeometry(0.1, 0.05, 0.08),
+    // Road geometries
+    roadTile: new THREE.PlaneGeometry(MAP.TILE_SIZE, MAP.TILE_SIZE),
+    roadLine: new THREE.PlaneGeometry(MAP.TILE_SIZE * 0.05, MAP.TILE_SIZE * 0.8)
+};
+
 // Create a dead tree with natural branching structure
 function createTree(height = 0.8) {
     const group = new THREE.Group();
 
-    // Darker, weathered wood colors
-    const trunkColor = 0x3d2d1f;
-    const branchColor = 0x2e2218;
-
-    const trunkMat = new THREE.MeshStandardMaterial({
-        color: trunkColor,
-        roughness: 0.95,
-        metalness: 0.0
-    });
-
-    const branchMat = new THREE.MeshStandardMaterial({
-        color: branchColor,
-        roughness: 0.95,
-        metalness: 0.0
-    });
+    // Use cached materials
+    const trunkMat = cachedMaterials.trunk;
+    const branchMat = cachedMaterials.branch;
 
     // Main trunk - tapered with slight lean
     const trunkHeight = height * 0.55;

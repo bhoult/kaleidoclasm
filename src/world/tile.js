@@ -224,6 +224,32 @@ export class Tile {
         return this.terrain;
     }
 
+    // Dispose of GPU resources
+    dispose(scene) {
+        if (this.mesh) {
+            if (scene) scene.remove(this.mesh);
+            if (this.mesh.geometry) this.mesh.geometry.dispose();
+            if (this.baseMaterial) this.baseMaterial.dispose();
+            this.mesh = null;
+            this.baseMaterial = null;
+        }
+        if (this.glowMesh) {
+            if (scene) scene.remove(this.glowMesh);
+            if (this.glowMesh.geometry) this.glowMesh.geometry.dispose();
+            if (this.glowMesh.material) this.glowMesh.material.dispose();
+            this.glowMesh = null;
+        }
+        // Dispose props
+        for (const prop of this.props) {
+            if (scene) scene.remove(prop);
+            prop.traverse(child => {
+                if (child.geometry) child.geometry.dispose();
+                // Don't dispose shared materials from cachedMaterials
+            });
+        }
+        this.props = [];
+    }
+
     toJSON() {
         return {
             x: this.x,

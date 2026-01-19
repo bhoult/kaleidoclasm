@@ -9,8 +9,21 @@ const WALL_HEIGHT = 0.15;  // Short walls for top-down view
 const FURNITURE_HEIGHT = 0.2;
 const FLOOR_HEIGHT = 0.05;
 
-// Materials cache
+// === CACHED GEOMETRIES (reused across all interiors) ===
+const cachedGeometries = {
+    floor: new THREE.BoxGeometry(INTERIOR_SCALE * 0.98, FLOOR_HEIGHT, INTERIOR_SCALE * 0.98),
+    wall: new THREE.BoxGeometry(INTERIOR_SCALE * 0.98, WALL_HEIGHT, INTERIOR_SCALE * 0.98),
+    door: new THREE.BoxGeometry(INTERIOR_SCALE * 0.98, FLOOR_HEIGHT * 1.5, INTERIOR_SCALE * 0.98),
+    exit: new THREE.BoxGeometry(INTERIOR_SCALE * 0.98, FLOOR_HEIGHT * 2, INTERIOR_SCALE * 0.98),
+    exitGlow: new THREE.BoxGeometry(INTERIOR_SCALE * 0.99, FLOOR_HEIGHT * 0.5, INTERIOR_SCALE * 0.99),
+    lock: new THREE.BoxGeometry(INTERIOR_SCALE * 0.1, INTERIOR_SCALE * 0.1, INTERIOR_SCALE * 0.05)
+};
+
+// Materials cache (base materials - shared)
 const materials = {};
+
+// Track cloned materials per interior for disposal
+let currentInteriorMaterials = [];
 
 function getMaterial(color, options = {}) {
     const key = `${color}_${JSON.stringify(options)}`;
@@ -28,6 +41,12 @@ function getMaterial(color, options = {}) {
 
 // Render the entire interior to a scene
 export function renderInterior(interior, scene) {
+    // Dispose cloned materials from previous render
+    for (const mat of currentInteriorMaterials) {
+        mat.dispose();
+    }
+    currentInteriorMaterials = [];
+
     // Clear any existing scene objects
     interior.dispose();
 
@@ -118,14 +137,11 @@ export function renderInterior(interior, scene) {
 
 // Create floor tile mesh
 function createTileMesh(tile, worldX, worldZ) {
-    const geometry = new THREE.BoxGeometry(
-        INTERIOR_SCALE * 0.98,
-        FLOOR_HEIGHT,
-        INTERIOR_SCALE * 0.98
-    );
-
     const material = getMaterial(tile.terrain.color);
-    const mesh = new THREE.Mesh(geometry, material.clone());  // Clone for individual highlighting
+    const clonedMat = material.clone();
+    currentInteriorMaterials.push(clonedMat);  // Track for disposal
+
+    const mesh = new THREE.Mesh(cachedGeometries.floor, clonedMat);
 
     mesh.position.set(worldX, FLOOR_HEIGHT / 2, worldZ);
     mesh.receiveShadow = true;
@@ -139,14 +155,8 @@ function createTileMesh(tile, worldX, worldZ) {
 
 // Create wall mesh
 function createWallMesh(tile, worldX, worldZ) {
-    const geometry = new THREE.BoxGeometry(
-        INTERIOR_SCALE * 0.98,
-        WALL_HEIGHT,
-        INTERIOR_SCALE * 0.98
-    );
-
     const material = getMaterial(INTERIOR_TERRAIN.WALL.color, { roughness: 0.9 });
-    const mesh = new THREE.Mesh(geometry, material);
+    const mesh = new THREE.Mesh(cachedGeometries.wall, material);
 
     mesh.position.set(worldX, WALL_HEIGHT / 2 + FLOOR_HEIGHT, worldZ);
     mesh.castShadow = true;
@@ -157,13 +167,6 @@ function createWallMesh(tile, worldX, worldZ) {
 
 // Create door mesh - simple colored tile for top-down view
 function createDoorMesh(tile, worldX, worldZ) {
-    // For top-down view, render doors as colored floor tiles
-    const geometry = new THREE.BoxGeometry(
-        INTERIOR_SCALE * 0.98,
-        FLOOR_HEIGHT * 1.5,
-        INTERIOR_SCALE * 0.98
-    );
-
     let color;
     if (tile.terrain === INTERIOR_TERRAIN.DOOR_LOCKED) {
         color = 0x8b4513;  // Dark brown for locked
@@ -174,7 +177,10 @@ function createDoorMesh(tile, worldX, worldZ) {
     }
 
     const material = getMaterial(color);
-    const mesh = new THREE.Mesh(geometry, material.clone());
+    const clonedMat = material.clone();
+    currentInteriorMaterials.push(clonedMat);  // Track for disposal
+
+    const mesh = new THREE.Mesh(cachedGeometries.door, clonedMat);
 
     mesh.position.set(worldX, FLOOR_HEIGHT * 0.75, worldZ);
     mesh.receiveShadow = true;
@@ -188,16 +194,12 @@ function createDoorMesh(tile, worldX, worldZ) {
 
 // Create window mesh - clickable tile with glass indicator
 function createWindowMesh(tile, worldX, worldZ) {
-    // Use a single mesh for easier raycasting
-    const geometry = new THREE.BoxGeometry(
-        INTERIOR_SCALE * 0.98,
-        WALL_HEIGHT,
-        INTERIOR_SCALE * 0.98
-    );
-
     // Blue-tinted material to indicate window
     const material = getMaterial(0x6688aa, { roughness: 0.7 });
-    const mesh = new THREE.Mesh(geometry, material.clone());
+    const clonedMat = material.clone();
+    currentInteriorMaterials.push(clonedMat);  // Track for disposal
+
+    const mesh = new THREE.Mesh(cachedGeometries.wall, clonedMat);
 
     mesh.position.set(worldX, WALL_HEIGHT / 2 + FLOOR_HEIGHT, worldZ);
     mesh.castShadow = true;
@@ -210,17 +212,21 @@ function createWindowMesh(tile, worldX, worldZ) {
     return mesh;
 }
 
+// Cached glow material for exit
+const exitGlowMat = new THREE.MeshBasicMaterial({
+    color: 0x44ff44,
+    transparent: true,
+    opacity: 0.3
+});
+
 // Create exit door mesh (highlighted differently)
 function createExitMesh(tile, worldX, worldZ) {
-    const geometry = new THREE.BoxGeometry(
-        INTERIOR_SCALE * 0.98,
-        FLOOR_HEIGHT * 2,
-        INTERIOR_SCALE * 0.98
-    );
-
     // Exit is green-tinted
     const material = getMaterial(0x4a6a4a);
-    const mesh = new THREE.Mesh(geometry, material.clone());
+    const clonedMat = material.clone();
+    currentInteriorMaterials.push(clonedMat);
+
+    const mesh = new THREE.Mesh(cachedGeometries.exit, clonedMat);
 
     mesh.position.set(worldX, FLOOR_HEIGHT, worldZ);
     mesh.receiveShadow = true;
@@ -228,18 +234,8 @@ function createExitMesh(tile, worldX, worldZ) {
 
     tile.baseMaterial = mesh.material;
 
-    // Add glow effect
-    const glowGeom = new THREE.BoxGeometry(
-        INTERIOR_SCALE * 0.99,
-        FLOOR_HEIGHT * 0.5,
-        INTERIOR_SCALE * 0.99
-    );
-    const glowMat = new THREE.MeshBasicMaterial({
-        color: 0x44ff44,
-        transparent: true,
-        opacity: 0.3
-    });
-    const glow = new THREE.Mesh(glowGeom, glowMat);
+    // Add glow effect using cached geometry and material
+    const glow = new THREE.Mesh(cachedGeometries.exitGlow, exitGlowMat);
     glow.position.set(worldX, FLOOR_HEIGHT * 2, worldZ);
 
     const group = new THREE.Group();
@@ -306,7 +302,10 @@ function createFurnitureMesh(tile, worldX, worldZ) {
 
     const geometry = new THREE.BoxGeometry(width, height, depth);
     const material = getMaterial(furniture.color);
-    const mesh = new THREE.Mesh(geometry, material.clone());
+    const clonedMat = material.clone();
+    currentInteriorMaterials.push(clonedMat);
+
+    const mesh = new THREE.Mesh(geometry, clonedMat);
 
     mesh.position.set(worldX, height / 2 + FLOOR_HEIGHT, worldZ);
     mesh.castShadow = true;
@@ -316,15 +315,10 @@ function createFurnitureMesh(tile, worldX, worldZ) {
 
     tile.baseMaterial = mesh.material;
 
-    // Add lock indicator for locked furniture
+    // Add lock indicator for locked furniture (using cached geometry)
     if (furniture.locked) {
-        const lockGeom = new THREE.BoxGeometry(
-            INTERIOR_SCALE * 0.1,
-            INTERIOR_SCALE * 0.1,
-            INTERIOR_SCALE * 0.05
-        );
         const lockMat = getMaterial(0xffcc00);
-        const lock = new THREE.Mesh(lockGeom, lockMat);
+        const lock = new THREE.Mesh(cachedGeometries.lock, lockMat);
         lock.position.set(width * 0.3, height * 0.3, depth / 2 + 0.02);
         mesh.add(lock);
     }

@@ -12,6 +12,18 @@ export class Chunk {
         this.occupiedByLargeObject = new Set(); // Track multi-tile object positions
     }
 
+    // Dispose of all GPU resources in this chunk
+    dispose(scene) {
+        for (const tile of this.tiles.values()) {
+            if (tile.dispose) {
+                tile.dispose(scene);
+            }
+        }
+        this.tiles.clear();
+        this.buildings = [];
+        this.rendered = false;
+    }
+
     get key() { return `${this.cx},${this.cy}`; }
     get minX() { return this.cx * CHUNK.SIZE; }
     get maxX() { return (this.cx + 1) * CHUNK.SIZE - 1; }
