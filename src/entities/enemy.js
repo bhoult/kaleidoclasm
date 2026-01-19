@@ -5,7 +5,8 @@ import { GameState } from '../state.js';
 import { getTile, getNeighbors } from '../world/map.js';
 import { findPath } from '../systems/pathfinding.js';
 import { resolveCombat } from '../systems/combat.js';
-import { COLORS, MAP, COMBAT } from '../config.js';
+import { COLORS, MAP, COMBAT, CHUNK } from '../config.js';
+import { isTileRevealed } from '../systems/fogOfWar.js';
 
 let enemyIdCounter = 0;
 
@@ -281,22 +282,32 @@ export class Enemy {
 }
 
 export function spawnEnemies(count) {
+    if (GameState.units.length === 0) return;
+
     for (let i = 0; i < count; i++) {
-        // Find valid spawn location (away from player units)
+        // Find valid spawn location near player units but not too close
+        // Enemies spawn at the edge of revealed area
         let attempts = 0;
         while (attempts < 50) {
-            const x = Math.floor(Math.random() * MAP.WIDTH);
-            const y = Math.floor(Math.random() * MAP.HEIGHT);
+            // Pick a random player unit to spawn near
+            const targetUnit = GameState.units[Math.floor(Math.random() * GameState.units.length)];
+
+            // Spawn at edge of reveal radius (8-12 tiles from unit)
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 8 + Math.random() * 4;
+            const x = Math.round(targetUnit.x + Math.cos(angle) * dist);
+            const y = Math.round(targetUnit.y + Math.sin(angle) * dist);
+
             const tile = getTile(x, y);
 
             if (tile && tile.isPassable && !tile.getUnit() && !tile.getEnemy()) {
-                // Check distance from player units
+                // Check distance from all player units (not too close)
                 let tooClose = false;
                 for (const unit of GameState.units) {
-                    const dist = Math.sqrt(
+                    const unitDist = Math.sqrt(
                         Math.pow(x - unit.x, 2) + Math.pow(y - unit.y, 2)
                     );
-                    if (dist < 8) {
+                    if (unitDist < 6) {
                         tooClose = true;
                         break;
                     }

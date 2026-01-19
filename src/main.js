@@ -13,6 +13,7 @@ import { renderHand } from './ui/cardhand.js';
 import { Enemy, spawnEnemies, updateEnemies } from './entities/enemy.js';
 import { applyRadiation } from './systems/radiation.js';
 import { consumeResources } from './systems/resources.js';
+import { initialReveal, revealAroundPosition } from './systems/fogOfWar.js';
 
 let animationId = null;
 
@@ -20,12 +21,14 @@ function init() {
     // Initialize renderer
     initRenderer();
 
-    // Generate and render map
+    // Initialize map (chunk-based, generates on demand)
     generateMap();
-    renderMap();
 
-    // Create starting units
+    // Create starting units (near origin)
     createStartingUnits();
+
+    // Reveal tiles around starting units (fog of war)
+    initialReveal(GameState.units);
 
     // Initialize systems
     initTurnSystem();
@@ -225,8 +228,8 @@ function restartGame() {
     // Reinitialize (add lights back, don't recreate renderer)
     addLights();
     generateMap();
-    renderMap();
     createStartingUnits();
+    initialReveal(GameState.units);
     initCards();
     drawCards(5);
     renderHand();
@@ -245,7 +248,8 @@ function saveGame() {
         globalResources: { ...GameState.globalResources },
         hand: GameState.hand.map(c => ({ name: c.name, type: c.type })),
         deckSize: GameState.playerDeck.length,
-        discardSize: GameState.discardPile.length
+        discardSize: GameState.discardPile.length,
+        revealedTiles: Array.from(GameState.map.revealedTiles)  // Save revealed tile positions
     };
 
     localStorage.setItem('echoesOfTheFall_save', JSON.stringify(saveData));
@@ -272,10 +276,18 @@ function loadGame() {
         GameState.phase = saveData.phase;
         GameState.globalResources = saveData.globalResources;
 
-        // Regenerate map with same seed
+        // Regenerate map with same seed (deterministic)
         addLights();
         generateMap(saveData.seed);
-        renderMap();
+
+        // Restore revealed tiles from save
+        if (saveData.revealedTiles && Array.isArray(saveData.revealedTiles)) {
+            // Reveal each saved tile position (radius 0 reveals just that tile)
+            for (const key of saveData.revealedTiles) {
+                const [x, y] = key.split(',').map(Number);
+                revealAroundPosition(x, y, 0);
+            }
+        }
 
         // Recreate units
         for (const unitData of saveData.units) {

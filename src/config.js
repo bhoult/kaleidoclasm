@@ -1,10 +1,15 @@
 // Game configuration constants
 
 export const MAP = {
-    WIDTH: 20,
-    HEIGHT: 20,
-    TILE_SIZE: 1,
-    TILE_HEIGHT: 0.3
+    TILE_SIZE: 1,           // Visual size in world units
+    TILE_HEIGHT: 0.3,
+    TILE_SQUARE_FEET: 10    // Each tile represents 10x10 square feet (100 sq ft per tile)
+};
+
+export const CHUNK = {
+    SIZE: 20,               // 20x20 tiles per chunk
+    REVEAL_RADIUS: 10,      // Fog of war radius in tiles
+    MAX_COORD: 5000         // -5000 to +4999 tiles from origin (500x500 chunks max)
 };
 
 export const CAMERA = {

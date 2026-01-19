@@ -4,6 +4,7 @@ import { scene } from '../core/renderer.js';
 import { GameState } from '../state.js';
 import { getTile } from '../world/map.js';
 import { UNIT, COLORS, MAP, GAME, RADIATION } from '../config.js';
+import { updateVisibility } from '../systems/fogOfWar.js';
 
 let unitIdCounter = 0;
 
@@ -140,6 +141,9 @@ export class Unit {
         );
         this.animating = true;
 
+        // Reveal tiles around new position (fog of war)
+        updateVisibility(this);
+
         return true;
     }
 
@@ -230,10 +234,11 @@ export class Unit {
 
 export function createStartingUnits() {
     const names = ['Alex', 'Jordan', 'Casey'];
+    // Start near origin (0,0) for predictable initial chunks
     const startPositions = [
-        { x: 5, y: 5 },
-        { x: 6, y: 5 },
-        { x: 5, y: 6 }
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+        { x: 0, y: 1 }
     ];
 
     for (let i = 0; i < GAME.STARTING_UNITS; i++) {

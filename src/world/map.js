@@ -3,99 +3,38 @@ import * as THREE from 'three';
 import { scene } from '../core/renderer.js';
 import { GameState } from '../state.js';
 import { MAP } from '../config.js';
-import { Tile } from './tile.js';
-import { initNoise, fbm, noise2D } from './noise.js';
-import { addPropsToTile, generateRoads, createUrbanZones } from './props.js';
+import { initChunkSystem, getTileGlobal, getNeighborsGlobal, rebuildVisibleMeshCache } from './chunkManager.js';
 
+// Initialize map with seed (no longer generates everything upfront)
+export function initMap(seed = Date.now()) {
+    initChunkSystem(seed);
+}
+
+// Legacy alias for compatibility
 export function generateMap(seed = Date.now()) {
-    initNoise(seed);
-    GameState.seed = seed;
-    GameState.map.width = MAP.WIDTH;
-    GameState.map.height = MAP.HEIGHT;
-    GameState.map.tiles = [];
-
-    // Generate tiles
-    for (let y = 0; y < MAP.HEIGHT; y++) {
-        const row = [];
-        for (let x = 0; x < MAP.WIDTH; x++) {
-            // Use FBM for elevation
-            const elevation = (fbm(x * 0.1, y * 0.1, 4) + 1) / 2;
-
-            // Different noise for moisture
-            const moisture = (fbm(x * 0.08 + 100, y * 0.08 + 100, 3) + 1) / 2;
-
-            // Radiation clusters (rare, ~5% of map)
-            const radNoise = noise2D(x * 0.15, y * 0.15);
-            const radiationLevel = radNoise > 0.65 ? (radNoise - 0.65) / 0.35 : 0;
-
-            const tile = new Tile(x, y, elevation, moisture, radiationLevel);
-            row.push(tile);
-        }
-        GameState.map.tiles.push(row);
-    }
-
-    return GameState.map.tiles;
+    initMap(seed);
 }
 
+// renderMap is now a no-op - chunks render when revealed
 export function renderMap() {
-    const { tiles } = GameState.map;
-
-    // First pass: create urban zones (modifies terrain types)
-    createUrbanZones(tiles);
-
-    // Second pass: create tile meshes with final terrain
-    for (let y = 0; y < tiles.length; y++) {
-        for (let x = 0; x < tiles[y].length; x++) {
-            const tile = tiles[y][x];
-            const mesh = tile.createMesh();
-            scene.add(mesh);
-
-            if (tile.glowMesh) {
-                scene.add(tile.glowMesh);
-            }
-        }
-    }
-
-    // Third pass: add props (depends on terrain type)
-    for (let y = 0; y < tiles.length; y++) {
-        for (let x = 0; x < tiles[y].length; x++) {
-            addPropsToTile(tiles[y][x]);
-        }
-    }
-
-    // Fourth pass: generate roads connecting buildings
-    generateRoads(tiles);
+    // Chunks are rendered when revealed via fog of war system
 }
 
+// Delegate to chunk-based global functions
 export function getTile(x, y) {
-    if (x < 0 || x >= MAP.WIDTH || y < 0 || y >= MAP.HEIGHT) {
-        return null;
-    }
-    return GameState.map.tiles[y]?.[x] ?? null;
+    return getTileGlobal(x, y);
 }
 
 export function getNeighbors(x, y) {
-    const neighbors = [];
-    const directions = [
-        [0, -1], [1, 0], [0, 1], [-1, 0], // Cardinal
-        [1, -1], [1, 1], [-1, 1], [-1, -1] // Diagonal
-    ];
-
-    for (const [dx, dy] of directions) {
-        const tile = getTile(x + dx, y + dy);
-        if (tile && tile.isPassable) {
-            neighbors.push(tile);
-        }
-    }
-
-    return neighbors;
+    return getNeighborsGlobal(x, y);
 }
 
 export function clearMapHighlights() {
-    const { tiles } = GameState.map;
-    for (let y = 0; y < tiles.length; y++) {
-        for (let x = 0; x < tiles[y].length; x++) {
-            tiles[y][x].clearHighlight();
+    // Clear highlights from all revealed tiles
+    for (const key of GameState.map.revealedTiles) {
+        const tile = GameState.map.tiles.get(key);
+        if (tile) {
+            tile.clearHighlight();
         }
     }
 
@@ -140,5 +79,7 @@ export function highlightTiles(tiles, color) {
 export function worldToTile(worldX, worldZ) {
     const x = Math.round(worldX / MAP.TILE_SIZE);
     const y = Math.round(worldZ / MAP.TILE_SIZE);
-    return getTile(x, y);
+    // Only return revealed tiles for interaction
+    const tile = getTile(x, y);
+    return (tile && tile.revealed) ? tile : null;
 }

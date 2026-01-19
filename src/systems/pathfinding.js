@@ -1,6 +1,7 @@
 // A* pathfinding implementation
 import { getTile, getNeighbors } from '../world/map.js';
 import { MAP, RADIATION } from '../config.js';
+import { isTileRevealed } from '../systems/fogOfWar.js';
 
 class PriorityQueue {
     constructor() {
@@ -108,6 +109,9 @@ export function getMovementRange(unit) {
 
         for (const neighbor of getNeighbors(tile.x, tile.y)) {
             const neighborKey = `${neighbor.x},${neighbor.y}`;
+
+            // Only include revealed tiles in movement range display
+            if (!isTileRevealed(neighbor.x, neighbor.y)) continue;
 
             // Check if tile is occupied by enemy
             if (neighbor.getEnemy()) continue;

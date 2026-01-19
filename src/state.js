@@ -9,10 +9,11 @@ export const GameState = {
     victory: false,
 
     map: {
-        width: 0,
-        height: 0,
-        tiles: [],
-        revealed: new Set()
+        seed: 0,
+        chunks: new Map(),           // Map<"cx,cy", Chunk>
+        tiles: new Map(),            // Map<"x,y", Tile> - sparse global storage
+        revealedTiles: new Set(),    // Set<"x,y"> - tracks revealed tile positions
+        visibleTileMeshes: []        // Cached array for raycasting
     },
 
     units: [],
@@ -42,8 +43,11 @@ export const GameState = {
         this.phase = PHASES.ACTIONS;
         this.gameOver = false;
         this.victory = false;
-        this.map.tiles = [];
-        this.map.revealed.clear();
+        this.map.seed = 0;
+        this.map.chunks.clear();
+        this.map.tiles.clear();
+        this.map.revealedTiles.clear();
+        this.map.visibleTileMeshes = [];
         this.units = [];
         this.enemies = [];
         this.selectedUnit = null;

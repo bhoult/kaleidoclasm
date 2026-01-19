@@ -24,9 +24,9 @@ export function initRenderer() {
         1000
     );
 
-    // Position camera for isometric view
-    const centerX = MAP.WIDTH / 2;
-    const centerZ = MAP.HEIGHT / 2;
+    // Position camera for isometric view (centered at origin for chunk-based map)
+    const centerX = 0;
+    const centerZ = 0;
     camera.position.set(centerX + 20, 20, centerZ + 20);
     camera.lookAt(centerX, 0, centerZ);
 
@@ -40,14 +40,14 @@ export function initRenderer() {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    // Orbit controls
+    // Orbit controls (target at origin for chunk-based map)
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableRotate = true;
     controls.enablePan = true;
     controls.enableZoom = true;
     controls.minZoom = 0.5;
     controls.maxZoom = 3;
-    controls.target.set(centerX, 0, centerZ);
+    controls.target.set(0, 0, 0);
     controls.update();
 
     // Lighting

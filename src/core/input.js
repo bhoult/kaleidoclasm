@@ -25,12 +25,8 @@ function onMouseMove(event) {
 
     raycaster.setFromCamera(mouse, camera);
 
-    const tileMeshes = [];
-    for (const row of GameState.map.tiles) {
-        for (const tile of row) {
-            if (tile.mesh) tileMeshes.push(tile.mesh);
-        }
-    }
+    // Use cached visible tile meshes array (populated by fog of war reveal)
+    const tileMeshes = GameState.map.visibleTileMeshes;
 
     const intersects = raycaster.intersectObjects(tileMeshes);
 
@@ -57,8 +53,11 @@ function onMouseMove(event) {
             if (tooltip) {
                 let tooltipContent = `<strong>${tile.terrain.name}</strong>`;
 
-                // Show object on tile if present
-                if (tile.propName) {
+                // Show objects on tile if present
+                if (tile.propNames && tile.propNames.length > 0) {
+                    tooltipContent += `<br>Objects: ${tile.propNames.join(', ')}`;
+                } else if (tile.propName) {
+                    // Legacy fallback
                     tooltipContent += `<br>Object: ${tile.propName}`;
                 }
 
@@ -104,12 +103,8 @@ function onClick(event) {
 
     raycaster.setFromCamera(mouse, camera);
 
-    const tileMeshes = [];
-    for (const row of GameState.map.tiles) {
-        for (const tile of row) {
-            if (tile.mesh) tileMeshes.push(tile.mesh);
-        }
-    }
+    // Use cached visible tile meshes array
+    const tileMeshes = GameState.map.visibleTileMeshes;
 
     const intersects = raycaster.intersectObjects(tileMeshes);
 
@@ -131,12 +126,8 @@ function onRightClick(event) {
 
     raycaster.setFromCamera(mouse, camera);
 
-    const tileMeshes = [];
-    for (const row of GameState.map.tiles) {
-        for (const tile of row) {
-            if (tile.mesh) tileMeshes.push(tile.mesh);
-        }
-    }
+    // Use cached visible tile meshes array
+    const tileMeshes = GameState.map.visibleTileMeshes;
 
     const intersects = raycaster.intersectObjects(tileMeshes);
 

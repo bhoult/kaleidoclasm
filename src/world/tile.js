@@ -19,6 +19,8 @@ export class Tile {
         this.props = [];
         this.hasBuilding = false;
         this.hasRoad = false;
+        this.revealed = false;       // Fog of war state
+        this.chunk = null;           // Reference to parent chunk
     }
 
     determineTerrain() {
@@ -101,6 +103,30 @@ export class Tile {
         }
 
         return this.mesh;
+    }
+
+    // Reveal this tile (fog of war)
+    reveal(scene, visibleMeshCache) {
+        if (this.revealed) return;
+        this.revealed = true;
+
+        // Create mesh if it doesn't exist
+        if (!this.mesh) {
+            this.createMesh();
+        }
+
+        // Add to scene
+        if (scene && this.mesh && !this.mesh.parent) {
+            scene.add(this.mesh);
+            if (this.glowMesh) {
+                scene.add(this.glowMesh);
+            }
+        }
+
+        // Add to visible mesh cache for raycasting
+        if (visibleMeshCache && this.mesh) {
+            visibleMeshCache.push(this.mesh);
+        }
     }
 
     addRadiationGlow() {
