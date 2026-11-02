@@ -1,5 +1,7 @@
 # Echoes of the Fall
 
+Made by Claude Opus 4.5, instigated by [Brandon Hoult](https://hoult.co).
+
 A turn-based post-apocalyptic survival strategy game built with Three.js.
 
 ## About
